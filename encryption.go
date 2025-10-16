@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync/atomic"
 
 	"github.com/golang-jwt/jwt"
 	"gopkg.in/square/go-jose.v2"
@@ -48,7 +49,7 @@ const DefaultKey = `MIIEowIBAAKCAQEAtI1Jf2zmfwLzpAjVarORtjKtmCHQtgNxqWDdVNVa` +
 type Keypair struct {
 	PrivateKey *rsa.PrivateKey
 	PublicKey  *rsa.PublicKey
-	Kid        string
+	Kid        atomic.Value
 }
 
 // NewKeypair makes a Keypair off the provided rsa.PrivateKey or returns
@@ -98,8 +99,14 @@ func DefaultKeypair() (*Keypair, error) {
 
 // If not manually set, computes the JWT headers' `kid`
 func (k *Keypair) KeyID() (string, error) {
-	if k.Kid != "" {
-		return k.Kid, nil
+	var kid string
+	existingKid := k.Kid.Load()
+	if existingKid != nil {
+		kid = existingKid.(string)
+	}
+
+	if kid != "" {
+		return kid, nil
 	}
 
 	publicKeyDERBytes, err := x509.MarshalPKIXPublicKey(k.PublicKey)
@@ -113,9 +120,10 @@ func (k *Keypair) KeyID() (string, error) {
 	}
 	publicKeyDERHash := hasher.Sum(nil)
 
-	k.Kid = base64.RawURLEncoding.EncodeToString(publicKeyDERHash)
+	newKeyID := base64.RawURLEncoding.EncodeToString(publicKeyDERHash)
+	k.Kid.Store(newKeyID)
 
-	return k.Kid, nil
+	return newKeyID, nil
 }
 
 // JWKS is the JSON JWKS representation of the rsa.PublicKey

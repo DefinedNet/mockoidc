@@ -75,12 +75,12 @@ func TestKeypair_SignJWTVerifyJWT(t *testing.T) {
 			assert.Equal(t, audience, claims["aud"])
 			assert.Equal(t, issuer, claims["iss"])
 
-			alice.Kid = "WRONG"
+			alice.Kid.Store("WRONG")
 			_, err = alice.VerifyJWT(tokenStr)
 			assert.Error(t, err)
 
 			const customKid = "USER_DEFINED"
-			bob.Kid = customKid
+			bob.Kid.Store(customKid)
 			kidTokenStr, err := bob.SignJWT(standardClaims)
 			assert.NoError(t, err)
 
