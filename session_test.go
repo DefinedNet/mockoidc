@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang-jwt/jwt"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/oauth2-proxy/mockoidc"
 	"github.com/stretchr/testify/assert"
 )
@@ -14,8 +14,8 @@ var (
 		ClientID:     "Config.ClientId",
 		ClientSecret: "Config.ClientSecret",
 		Issuer:       "issuer.example.com",
-		AccessTTL:    600,
-		RefreshTTL:   14400,
+		AccessTTL:    600 * time.Second,
+		RefreshTTL:   14400 * time.Second,
 	}
 	dummySession = &mockoidc.Session{
 		SessionID: "DefaultSessionId",
@@ -55,7 +55,7 @@ func TestSession_AccessToken(t *testing.T) {
 	tokenString, err := dummySession.AccessToken(dummyConfig, keypair, mockoidc.NowFunc())
 	assert.NoError(t, err)
 
-	token, err := keypair.VerifyJWT(tokenString)
+	token, err := keypair.VerifyJWT(tokenString, mockoidc.NowFunc)
 	assert.NoError(t, err)
 	assert.True(t, token.Valid)
 
@@ -64,7 +64,9 @@ func TestSession_AccessToken(t *testing.T) {
 	assert.NotNil(t, claims)
 
 	assert.Equal(t, dummySession.SessionID, claims["jti"])
-	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
+	claimAudience, err := claims.GetAudience()
+	assert.NoError(t, err)
+	assert.Equal(t, jwt.ClaimStrings{dummyConfig.ClientID}, claimAudience)
 	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
 	assert.Equal(t, dummySession.User.ID(), claims["sub"])
 }
@@ -74,7 +76,7 @@ func TestSession_RefreshToken(t *testing.T) {
 	tokenString, err := dummySession.RefreshToken(dummyConfig, keypair, mockoidc.NowFunc())
 	assert.NoError(t, err)
 
-	token, err := keypair.VerifyJWT(tokenString)
+	token, err := keypair.VerifyJWT(tokenString, mockoidc.NowFunc)
 	assert.NoError(t, err)
 	assert.True(t, token.Valid)
 
@@ -83,7 +85,9 @@ func TestSession_RefreshToken(t *testing.T) {
 	assert.NotNil(t, claims)
 
 	assert.Equal(t, dummySession.SessionID, claims["jti"])
-	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
+	claimsAudience, err := claims.GetAudience()
+	assert.NoError(t, err)
+	assert.Equal(t, jwt.ClaimStrings{dummyConfig.ClientID}, claimsAudience)
 	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
 	assert.Equal(t, dummySession.User.ID(), claims["sub"])
 }
@@ -93,7 +97,7 @@ func TestSession_IDToken(t *testing.T) {
 	tokenString, err := dummySession.IDToken(dummyConfig, keypair, mockoidc.NowFunc())
 	assert.NoError(t, err)
 
-	token, err := keypair.VerifyJWT(tokenString)
+	token, err := keypair.VerifyJWT(tokenString, mockoidc.NowFunc)
 	assert.NoError(t, err)
 	assert.True(t, token.Valid)
 
@@ -102,7 +106,9 @@ func TestSession_IDToken(t *testing.T) {
 	assert.NotNil(t, claims)
 
 	assert.Equal(t, dummySession.SessionID, claims["jti"])
-	assert.Equal(t, dummyConfig.ClientID, claims["aud"])
+	claimsAudience, err := claims.GetAudience()
+	assert.NoError(t, err)
+	assert.Equal(t, jwt.ClaimStrings{dummyConfig.ClientID}, claimsAudience)
 	assert.Equal(t, dummyConfig.Issuer, claims["iss"])
 	assert.Equal(t, dummySession.User.ID(), claims["sub"])
 
@@ -178,7 +184,7 @@ func TestSessionStore_GetSessionFromToken(t *testing.T) {
 	tokenString, err := s2.AccessToken(dummyConfig, keypair, now)
 	assert.NoError(t, err)
 
-	token, err := keypair.VerifyJWT(tokenString)
+	token, err := keypair.VerifyJWT(tokenString, mockoidc.NowFunc)
 	assert.NoError(t, err)
 
 	session, err := ss.GetSessionByToken(token)
